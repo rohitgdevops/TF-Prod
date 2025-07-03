@@ -1,0 +1,32 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install zip
+      run: sudo apt-get update && sudo apt-get install -y zip
+
+    - name: Generate version and zip build
+      run: |
+        VERSION=1.0.${{ github.run_number }}
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        zip -r app-$VERSION.zip .
+
+    - name: Upload to S3
+      run: |
+        aws s3 cp app-${{ env.VERSION }}.zip s3://my-app-bucket/builds/app-${{ env.VERSION }}.zip
+
+    - name: Update SSM Parameter
+      run: |
+        aws ssm put-parameter --name "/myapp/release/latest_version" \
+          --value "${{ env.VERSION }}" \
+          --type "String" --overwrite
