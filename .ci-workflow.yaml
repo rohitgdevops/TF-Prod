@@ -1,85 +1,73 @@
-name: Terraform - PROD Infrastructure
+name: Terraform - DEV Infrastructure (with Security)
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
     paths:
-      - 'service-a/infra/prod/**'
+      - 'service-a/infra/dev/**'
   workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
 
 jobs:
-  terraform-prod:
-    name: Terraform Plan (PROD)
+  terraform-security:
+    name: Terraform CI & Security - DEV
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: service-a/infra/prod
+        working-directory: service-a/infra/dev
 
     steps:
-      - name: Checkout
+      - name: 📦 Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
+      - name: ⚙️ Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.0
 
-      - name: Check Format
-        run: terraform fmt -check
+      - name: ✅ Check Terraform Format
+        run: terraform fmt -check -recursive
 
-      - name: Init
+      - name: 🔍 Install tflint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --version
+
+      - name: 🔎 Run tflint
+        run: tflint --recursive
+
+      - name: 🔐 Install tfsec
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+          tfsec -v
+
+      - name: 🚨 Run tfsec Scan
+        run: tfsec .
+
+      - name: 🛡️ Install checkov (optional, heavy)
+        run: |
+          pip install checkov
+          checkov --version
+
+      - name: 🚨 Run Checkov Scan (optional)
+        run: checkov -d . || true
+
+      - name: 🧪 Terraform Init
         run: terraform init
 
-      - name: Validate
+      - name: ✅ Terraform Validate
         run: terraform validate
 
-      - name: Plan
+      - name: 📉 Terraform Plan
         run: terraform plan -out=tfplan
 
-      - name: Upload Plan Artifact
+      - name: 📦 Save Plan Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: prod-plan
-          path: service-a/infra/prod/tfplan
+          name: dev-plan
+          path: service-a/infra/dev/tfplan
 
-  approval:
-    name: 🔒 Manual Approval for PROD
-    runs-on: ubuntu-latest
-    needs: terraform-prod
-    environment:
-      name: production
-      url: https://console.aws.amazon.com/
-    steps:
-      - name: Confirm
-        run: echo "Manual approval waiting"
-
-  apply:
-    name: ☁️ Apply PROD Infra
-    runs-on: ubuntu-latest
-    needs: approval
-    defaults:
-      run:
-        working-directory: service-a/infra/prod
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Init
-        run: terraform init
-
-      - name: Download Plan
-        uses: actions/download-artifact@v4
-        with:
-          name: prod-plan
-          path: service-a/infra/prod
-
-      - name: Apply Terraform
+      - name: 🚀 Apply Terraform
         run: terraform apply -auto-approve tfplan
