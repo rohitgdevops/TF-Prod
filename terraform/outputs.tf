@@ -1,3 +1,1 @@
-output "build_version" {
-  value = aws_ssm_parameter.build_version.value
-}
+output "load_balancer_dns" { value = aws_lb.web_lb.dns_name }
